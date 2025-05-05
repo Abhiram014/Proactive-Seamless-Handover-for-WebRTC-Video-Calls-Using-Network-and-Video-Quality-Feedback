@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Adaptive Video Call</title>
+    <style>
+        /* Modern Reset */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+            color: #333;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            transition: background-color 0.3s ease;
+            position: relative;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.8rem;
+            text-align: center;
+            color: #2c3e50;
+            margin-top: 0.4rem;
+        }
+
+        /* Main Container */
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            grid-template-rows: auto 1fr auto auto;
+            gap: 8px;
+            width: 98%;
+            max-width: 1200px;
+            max-height: 95vh;
+            overflow: hidden;
+        }
+
+        /* Video Container */
+        .video-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            grid-row: 1 / 3;
+        }
+
+        .video-wrapper {
+            width: 100%;
+            background-color: #fff;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: box-shadow 0.3s ease;
+            margin-bottom: 0.4rem;
+        }
+
+        .video-wrapper:last-child {
+            margin-bottom: 0;
+        }
+
+        .video-title {
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.9rem;
+            color: #555;
+            border-bottom: 1px solid #eee;
+        }
+
+        video {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-height: 35vh;
+            background-color: #000;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 0.4rem;
+            margin-bottom: 0.8rem;
+            grid-column: 1 / 2;
+            grid-row: 3 / 4;
+        }
+
+        button {
+            padding: 0.4rem 0.8rem;
+            border: none;
+            border-radius: 4px;
+            background-color: #3498db;
+            color: white;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        button:hover {
+            background-color: #2980b9;
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            background-color: #2980b9;
+            transform: translateY(0);
+            box-shadow: 0 0px 1px rgba(0, 0, 0, 0.1);
+        }
+
+        button#startCall {
+            background-color: #2ecc71;
+        }
+
+        button#startCall:hover {
+            background-color: #27ae60;
+        }
+
+        /* Stats Dashboard */
+        #dashboard {
+            width: 100%;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+            padding: 0.8rem;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: auto repeat(5, auto) 1fr;
+            gap: 0.4rem;
+            font-size: 0.7rem;
+            grid-column: 2 / 3;
+            grid-row: 1 / 5;
+        }
+
+        #dashboard h2 {
+            grid-column: 1 / 3;
+            font-size: 1.2rem;
+            color: #2c3e50;
+            margin-bottom: 0.4rem;
+            text-align: center;
+        }
+
+        .stat-card {
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            padding: 0.6rem;
+            border: 1px solid #eee;
+            transition: border-color 0.3s ease, transform 0.1s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-card:hover {
+            border-color: #ddd;
+            transform: scale(1.005);
+        }
+
+        .stat-title {
+            font-size: 0.7rem;
+            color: #777;
+            margin-bottom: 0.1rem;
+        }
+
+        .stat-value {
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: #333;
+            word-wrap: break-word;
+        }
+
+        .stat-threshold {
+            font-size: 0.6rem;
+            color: #888;
+            margin-top: 0.2rem;
+        }
+
+        .stat-graph {
+            height: 4px;
+            background-color: #ddd;
+            margin-top: 0.3rem;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .stat-graph .graph {
+            display: flex;
+            height: 100%;
+        }
+
+        .stat-graph span {
+            display: block;
+            height: 100%;
+            background-color: #3498db;
+            transition: width 0.1s ease;
+        }
+
+        .stat-graph span:last-child {
+            background-color: #2980b9;
+        }
+
+        #decision {
+            grid-column: 1 / 3;
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #fff;
+            background-color: #34495e;
+            padding: 0.3rem;
+            border-radius: 4px;
+        }
+
+        #decision.warning {
+            background-color: #f39c12;
+            color: #fff;
+        }
+
+        .stat-value.warning {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        #quality-score-card .stat-value {
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        /* Specific Grid Areas */
+        #dashboard h2 { grid-area: 1 / 1 / 2 / 3; }
+        #rtt-card { grid-area: 2 / 1 / 3 / 2; }
+        #rtt-trend-card { grid-area: 2 / 2 / 3 / 3; }
+        #bitrate-in-card { grid-area: 3 / 1 / 4 / 2; }
+        #bitrate-out-card { grid-area: 3 / 2 / 4 / 3; }
+        #packets-lost-card { grid-area: 4 / 1 / 5 / 2; }
+        #jitter-card { grid-area: 4 / 2 / 5 / 3; }
+        #frame-rate-card { grid-area: 5 / 1 / 6 / 2; }
+        #frames-dropped-card { grid-area: 5 / 2 / 6 / 3; }
+        #network-info-card { grid-area: 6 / 1 / 7 / 3; display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; }
+        #active-conn-card { grid-area: 7 / 1 / 8 / 3; display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; }
+        #decision { grid-area: 8 / 1 / 9 / 3; }
+
+        /* Ensure inner cards fill the container */
+        #network-info-card .stat-card,
+        #active-conn-card .stat-card {
+             padding: 0.4rem;
+        }
+
+        /* Media Queries for Responsiveness */
+        @media (max-width: 768px) {
+            body {
+                justify-content: flex-start;
+                padding: 5px;
+            }
+
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto 1fr;
+                width: 100%;
+                max-height: none;
+                gap: 5px;
+            }
+
+            .video-container {
+                grid-row: 1 / 2;
+            }
+            .controls {
+                grid-row: 2 / 3;
+            }
+            #dashboard {
+                grid-column: 1 / 2;
+                grid-row: 3 / 4;
+                width: 100%;
+                margin-top: 0;
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto repeat(6, auto) 1fr;
+                padding: 0.5rem;
+            }
+
+            /* Adjust grid areas for 2-column layout on small screens */
+            #dashboard h2 { grid-area: 1 / 1 / 2 / 3; }
+            #rtt-card { grid-area: 2 / 1 / 3 / 2; }
+            #rtt-trend-card { grid-area: 2 / 2 / 3 / 3; }
+            #bitrate-in-card { grid-area: 3 / 1 / 4 / 2; }
+            #bitrate-out-card { grid-area: 3 / 2 / 4 / 3; }
+            #packets-lost-card { grid-area: 4 / 1 / 5 / 2; }
+            #jitter-card { grid-area: 4 / 2 / 5 / 3; }
+            #frame-rate-card { grid-area: 5 / 1 / 6 / 2; }
+            #frames-dropped-card { grid-area: 5 / 2 / 6 / 3; }
+            #network-info-card { grid-area: 6 / 1 / 7 / 3; }
+            #active-conn-card { grid-area: 7 / 1 / 8 / 3; }
+            #decision { grid-area: 8 / 1 / 9 / 3; }
+
+            video {
+                max-height: 25vh;
+            }
+
+            button {
+                font-size: 0.7rem;
+                padding: 0.3rem 0.6rem;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+        integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+
+<body>
+    <h1>WebRTC Adaptive Video Call</h1>
+
+    <div class="container">
+        <div class="video-container">
+            <div class="video-wrapper">
+                <h2 class="video-title">Local Video</h2>
+                <video id="localVideo" autoplay playsinline muted></video>
+            </div>
+            <div class="video-wrapper">
+                <h2 class="video-title">Remote Video</h2>
+                <video id="remoteVideo" autoplay playsinline></video>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="startCall"><i class="fas fa-phone"></i> Start Call</button>
+            <button id="toggleVideo"><i class="fas fa-video"></i> Toggle Video</button>
+            <button id="toggleAudio"><i class="fas fa-microphone"></i> Toggle Audio</button>
+        </div>
+
+        <div id="dashboard">
+            <h2>Call Quality Metrics</h2>
+            
+            <!-- First Row: RTT Metrics -->
+            <div class="stat-card" id="rtt-card">
+                <div class="stat-title">Round-Trip Time</div>
+                <div class="stat-value"><span id="rtt"></span> ms</div>
+                <div class="stat-graph">
+                    <div id="rttGraph" class="graph"></div>
+                </div>
+                <div class="stat-threshold">Threshold: <span id="rttThreshold"></span> ms</div>
+            </div>
+            <div class="stat-card" id="rtt-trend-card">
+                <div class="stat-title">RTT Trend</div>
+                <div class="stat-value"><span id="rttTrend"></span></div>
+            </div>
+
+            <!-- Second Row: Bitrate Metrics -->
+            <div class="stat-card" id="bitrate-in-card">
+                <div class="stat-title">Inbound Bitrate</div>
+                <div class="stat-value"><span id="bitrateIn"></span> kbps</div>
+                <div class="stat-graph">
+                    <div id="bitrateInGraph" class="graph"></div>
+                </div>
+                <div class="stat-threshold">Threshold: <span id="bitrateInThreshold"></span> kbps</div>
+            </div>
+            <div class="stat-card" id="bitrate-out-card">
+                <div class="stat-title">Outbound Bitrate</div>
+                <div class="stat-value"><span id="bitrateOut"></span> kbps</div>
+            </div>
+
+            <!-- Third Row: Packet Metrics -->
+            <div class="stat-card" id="packets-lost-card">
+                <div class="stat-title">Packet Loss</div>
+                <div class="stat-value"><span id="packetsLost"></span> %</div>
+                <div class="stat-threshold">Threshold: <span id="packetsLostThreshold"></span> %</div>
+            </div>
+            <div class="stat-card" id="jitter-card">
+                <div class="stat-title">Jitter</div>
+                <div class="stat-value"><span id="jitter"></span> ms</div>
+                <div class="stat-graph">
+                    <div id="jitterGraph" class="graph"></div>
+                </div>
+                <div class="stat-threshold">Threshold: <span id="jitterThreshold"></span> ms</div>
+            </div>
+
+            <!-- Fourth Row: Frame Metrics -->
+            <div class="stat-card" id="frame-rate-card">
+                <div class="stat-title">Frame Rate</div>
+                <div class="stat-value"><span id="frameRate"></span> fps</div>
+            </div>
+            <div class="stat-card" id="frames-dropped-card">
+                <div class="stat-title">Frames Dropped</div>
+                <div class="stat-value"><span id="framesDropped"></span></div>
+                <div class="stat-threshold">Threshold: <span id="frameDropThreshold"></span></div>
+            </div>
+
+            <!-- Network Info Section -->
+            <div class="stat-card" id="network-info-card">
+                <div class="stat-card">
+                    <div class="stat-title">Network Type</div>
+                    <div class="stat-value"><span id="networkType"></span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Downlink Speed</div>
+                    <div class="stat-value"><span id="downlink"></span> Mbps</div>
+                </div>
+            </div>
+
+            <!-- Connection Info Section -->
+            <div class="stat-card" id="active-conn-card">
+                <div class="stat-card">
+                    <div class="stat-title">Local Endpoint</div>
+                    <div class="stat-value"><span id="activeLocalEndpoint">N/A</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Remote Endpoint</div>
+                    <div class="stat-value"><span id="activeRemoteEndpoint">N/A</span></div>
+                </div>
+            </div>
+
+            <!-- Quality Score Section -->
+            <div class="stat-card" id="quality-score-card">
+                <div class="stat-title">Quality Score</div>
+                <div class="stat-value"><span id="qualityScore">0.00</span></div>
+            </div>
+            
+            <!-- Decision Weights Section -->
+            <div class="stat-card" id="decision-weights-card">
+                <div class="stat-title">Metric Weights</div>
+                <div class="stat-value" style="font-size: 0.75rem; line-height: 1.4;">
+                    RTT: 20%<br>
+                    Bitrate (in): 20%<br>
+                    Packet Loss: 25%<br>
+                    Frame Drops: 15%<br>
+                    Jitter: 20%
+                </div>
+            </div>
+
+            <!-- Decision Display -->
+            <div class="stat-card" id="decision">
+                Decision: <span id="decisionText">Stable</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Download Button -->
+    <button id="downloadLog" style="position: fixed; bottom: 10px; right: 10px; z-index: 1000;">Download Logs</button>
+
+    <!-- Script Includes -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
